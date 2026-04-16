@@ -1,0 +1,16 @@
+FROM rlsys/miles:MI350-355-latest
+
+# Fix missing dependencies
+RUN pip install --no-cache-dir nltk loguru
+
+# Upgrade triton to 3.4.0 (fixes cluster_dims compatibility)
+RUN pip install --no-cache-dir triton==3.4.0
+
+# Patch torch inductor for triton 3.4.0 cluster_dims attribute
+RUN HEURISTICS=$(python -c "import torch._inductor.runtime.triton_heuristics as m; print(m.__file__)") && \
+    sed -i 's/binary\.metadata\.cluster_dims/binary.metadata.cluster_dims if hasattr(binary.metadata, "cluster_dims") else (1, 1, 1)/g' "$HEURISTICS"
+
+# Build Primus-Turbo from source (CK, hipBLAS, Triton grouped GEMM backends)
+RUN cd /workspace/primus_train/Primus-Turbo && pip install -e .
+
+WORKDIR /workspace/primus_train/Primus
