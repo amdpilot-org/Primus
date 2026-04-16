@@ -11,6 +11,8 @@ RUN HEURISTICS=$(python -c "import torch._inductor.runtime.triton_heuristics as 
     sed -i 's/binary\.metadata\.cluster_dims/binary.metadata.cluster_dims if hasattr(binary.metadata, "cluster_dims") else (1, 1, 1)/g' "$HEURISTICS"
 
 # Build Primus-Turbo from source (CK, hipBLAS, Triton grouped GEMM backends)
-RUN cd /workspace/primus_train/Primus-Turbo && pip install -e .
+# GPU_ARCHS avoids needing rocminfo/GPU access at build time
+RUN cd /workspace/primus_train/Primus-Turbo && \
+    GPU_ARCHS="gfx950" pip install -e .
 
 WORKDIR /workspace/primus_train/Primus
