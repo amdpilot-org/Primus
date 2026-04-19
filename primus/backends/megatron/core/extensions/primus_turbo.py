@@ -3,8 +3,9 @@
 #
 # See LICENSE for license information.
 ###############################################################################
+import os
 from contextlib import contextmanager
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import primus_turbo.pytorch as pt
 import torch
@@ -1305,9 +1306,55 @@ class PrimusTurboGroupedMLP(TEGroupedMLP):
 
             self.activation_func_with_probs = _activation_func_with_probs
 
+        # ----------------------------------------------------------------
+        # Cast/copy boundary optimization (Baizhou 2026-04-19):
+        # Cache the result of _stack_grouped_linear_weight() across
+        # microbatches within one optimizer step. The stack+transpose+
+        # contiguous chain produces 35.2 ms / iter on gfx950 MI355X
+        # (qwen3_30B_A3B BF16 pretrain) overhead per profiler trace
+        # (16% of cast/copy bucket = 3.5% total GPU time). Cache key
+        # uses param._version which is bumped by optimizer.step, so the
+        # cache is automatically invalidated at step boundary while
+        # staying valid across grad-accumulation microbatches.
+        #
+        # CORRECTNESS: Reusing the cached tensor reuses its grad_fn
+        # closure (constructed at cache-miss time). This is autograd-
+        # correct because (1) _version unchanged means leaves were not
+        # mutated, (2) backward through stack/transpose/contiguous routes
+        # grads to the SAME leaf tensors the closure captured, and (3)
+        # AccumulateGrad on leaves is idempotent across multiple bwd
+        # passes from disjoint forward graphs (each microbatch is a
+        # separate fwd, sharing only the cached w1/w2 head).
+        #
+        # FOOTGUN: in-place mutation of weight.data via .copy_() bypasses
+        # _version tracking. Set PRIMUS_TURBO_DISABLE_GROUPED_WEIGHT_CACHE=1
+        # to force rebuild every call if you suspect this.
+        #
+        # GAIN IS GRAD-ACCUMULATION-CONDITIONAL: at mbs=1 gbs=8, 7/8
+        # = 87.5% hit rate, ~+3.5% total GPU. At mbs=gbs (no grad
+        # accum), 0% hit, no gain. Cross-trial benchmarks must hold
+        # mbs/gbs fixed.
+        # ----------------------------------------------------------------
+        self._weight_cache: Dict[int, Tuple[Tuple[int, ...], torch.Tensor]] = {}
+        self._cache_disabled = bool(int(os.environ.get(
+            "PRIMUS_TURBO_DISABLE_GROUPED_WEIGHT_CACHE", "0")))
+
     def _stack_grouped_linear_weight(self, module: torch.nn.Module) -> torch.Tensor:
         weights = [getattr(module, f"weight{i}") for i in range(self.num_local_experts)]
-        return torch.stack(weights, dim=0).transpose(1, 2).contiguous()
+        if self._cache_disabled:
+            return torch.stack(weights, dim=0).transpose(1, 2).contiguous()
+        key = id(module)
+        versions = tuple(w._version for w in weights)
+        cached = self._weight_cache.get(key)
+        if cached is not None and cached[0] == versions:
+            return cached[1]
+        if cached is not None:
+            assert all(v >= cv for v, cv in zip(versions, cached[0])), (
+                "weight version went backwards — in-place reset detected, cache invariant broken"
+            )
+        stacked = torch.stack(weights, dim=0).transpose(1, 2).contiguous()
+        self._weight_cache[key] = (versions, stacked)
+        return stacked
 
     def forward(
         self,
@@ -1621,16 +1668,21 @@ class PrimusTurboDeepEPTokenDispatcher(MoETokenDispatcher):
 
 
 class PrimusTurboRMSNorm(te.pytorch.RMSNorm):
+    """RMSNorm using F.rms_norm for torch.compile fusion compatibility.
+
+    Uses the same weight parameter as the parent TE RMSNorm to avoid
+    parameter count mismatch in distributed optimizer grad buffers.
+    """
+
     def __init__(self, *args, **kwargs):
         assert "device" in kwargs
         assert "dtype" in kwargs or "params_dtype" in kwargs, "device and dtype must be provided"
         super().__init__(*args, **kwargs)
-        self.rms_norm_func = pt.modules.RMSNorm(
-            normalized_shape=kwargs["hidden_size"],
-            eps=self.eps,
-            device=kwargs["device"],
-            dtype=kwargs["dtype"] if "dtype" in kwargs else kwargs["params_dtype"],
-        )
+        self._hidden_size = kwargs["hidden_size"]
+        self._norm_eps = self.eps
 
     def forward(self, x):
-        return self.rms_norm_func(x)
+        return torch.nn.functional.rms_norm(
+            x, (self._hidden_size,), self.weight, self._norm_eps
+        )
+
