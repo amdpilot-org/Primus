@@ -51,6 +51,11 @@ class _GroupedWeightCacheModule(nn.Module):
         if self._cache_disabled:
             self.cache_misses += 1
             return torch.stack(weights, dim=0).transpose(1, 2).contiguous()
+        # No-grad poisoning guard (per amdpilot-org/Primus#2 review): under no_grad
+        # (e.g. eval forward), bypass cache entirely — neither read nor write.
+        if not torch.is_grad_enabled():
+            self.cache_misses += 1
+            return torch.stack(weights, dim=0).transpose(1, 2).contiguous()
         key = id(self)
         versions = tuple(w._version for w in weights)
         cached = self._weight_cache.get(key)
@@ -166,3 +171,48 @@ def test_version_regression_assert():
     m._weight_cache[id(m)] = (fake_higher, cached_tensor)
     with pytest.raises(AssertionError, match="version went backwards"):
         m.stack_weights()
+
+
+def test_no_grad_does_not_poison_cache():
+    """Regression test for amdpilot-org/Primus#2 review (no_grad poisoning).
+
+    Scenario: optimizer.step bumps versions, then evaluator runs forward under
+    torch.no_grad(). Without the guard, the no_grad call would cache-miss + write
+    a no-grad tensor; the next training-step forward would cache-hit and silently
+    return a tensor with requires_grad=False, breaking gradient flow to expert
+    weights. Guard: under no_grad, neither read nor write the cache.
+    """
+    torch.manual_seed(42)
+    m = _GroupedWeightCacheModule(num_local_experts=4, K=16, M=8)
+
+    # Step 1: training-step populates cache with grad-enabled tensor
+    out_train_1 = m.stack_weights()
+    assert out_train_1.requires_grad, "training-step output should require grad"
+    assert m.cache_hits == 0 and m.cache_misses == 1
+
+    # Step 2: optimizer.step simulated by bumping _version (in-place add)
+    with torch.no_grad():
+        for i in range(m.num_local_experts):
+            getattr(m, f"weight{i}").add_(0.001 * torch.randn_like(getattr(m, f"weight{i}")))
+
+    # Step 3: evaluator forward under no_grad — must NOT poison cache
+    with torch.no_grad():
+        out_eval = m.stack_weights()
+        assert not out_eval.requires_grad, "no_grad output must have requires_grad=False"
+    # Cache miss count incremented (no-grad path took the bypass), but cache itself
+    # should NOT contain a no-grad entry corresponding to the post-step versions.
+    assert m.cache_misses == 2, "no_grad call should count as miss but not write"
+
+    # Step 4: subsequent training-step forward — must produce a grad-enabled tensor
+    out_train_2 = m.stack_weights()
+    assert out_train_2.requires_grad, (
+        "training-step after eval must return grad-enabled tensor; "
+        "if False, cache was poisoned by the eval no_grad call"
+    )
+    # Verify backward actually flows to leaf weights
+    out_train_2.sum().backward()
+    for i in range(m.num_local_experts):
+        g = getattr(m, f"weight{i}").grad
+        assert g is not None and g.abs().max().item() > 0, (
+            f"weight{i} got no gradient after backward; cache poisoning regressed"
+        )

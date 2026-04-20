@@ -1343,6 +1343,21 @@ class PrimusTurboGroupedMLP(TEGroupedMLP):
         weights = [getattr(module, f"weight{i}") for i in range(self.num_local_experts)]
         if self._cache_disabled:
             return torch.stack(weights, dim=0).transpose(1, 2).contiguous()
+        # CORRECTNESS (no_grad poisoning, per amdpilot-org/Primus#2 review):
+        # Evaluator forward runs under torch.no_grad() (see
+        # primus/backends/megatron/training/evaluator.py). If we cached the
+        # result of torch.stack(...) under no_grad, the stored tensor has
+        # requires_grad=False; a subsequent grad-enabled training forward
+        # that hits this entry would silently return a tensor that drops
+        # gradient flow to the expert weights. Two-line guard:
+        #   1. Under no_grad, never WRITE the cache (prevents poisoning)
+        #   2. Under no_grad, never READ the cache either — the stored
+        #      grad-enabled tensor's grad_fn would be discarded by the
+        #      no_grad context anyway, so recomputing is correct + cheap;
+        #      and the read-side guard makes the function independently
+        #      safe even if a poisoned entry somehow exists.
+        if not torch.is_grad_enabled():
+            return torch.stack(weights, dim=0).transpose(1, 2).contiguous()
         key = id(module)
         versions = tuple(w._version for w in weights)
         cached = self._weight_cache.get(key)
