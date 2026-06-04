@@ -26,6 +26,7 @@ from megatron.core.distributed import finalize_model_grads
 from megatron.core.distributed.distributed_data_parallel_config import (
     DistributedDataParallelConfig,
 )
+from megatron.core.transformer.moe import upcycling_utils
 from megatron.core.distributed.torch_fully_sharded_data_parallel import (
     TorchFullyShardedDataParallel as torch_FSDP,
 )
