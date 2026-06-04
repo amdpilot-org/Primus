@@ -84,7 +84,16 @@ class PrimusTopKRouter(TopKRouter):
             # grok2 router logit softcapping
             fused_softcap(logits, args.router_logit_softcapping)
 
-        if args.enable_primus_turbo and args.moe_use_fused_router_with_aux_score:
+        use_fused = getattr(args, "enable_primus_turbo", False) and getattr(
+            args, "moe_use_fused_router_with_aux_score", False
+        )
+        if use_fused:
+            try:
+                import primus_turbo.pytorch as pt
+            except ImportError:
+                use_fused = False
+
+        if use_fused:
             scores, routing_map = self.fused_router_and_auxiliary_loss(logits)
         else:
             scores, routing_map = super().routing(logits, **kwargs)
