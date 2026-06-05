@@ -1,0 +1,43 @@
+{
+  "commit": "05ec3231288f3932cdef789a06149d26825736ff",
+  "failures": [
+    "one or more required model cache mount paths missing"
+  ],
+  "git_status_short": "?? primus/recipes/\n?? primus/scripts/\n?? stage0_harness_result.json",
+  "gpu_probe": {
+    "device_names": [
+      "AMD Instinct MI300X",
+      "AMD Instinct MI300X",
+      "AMD Instinct MI300X",
+      "AMD Instinct MI300X",
+      "AMD Instinct MI300X",
+      "AMD Instinct MI300X",
+      "AMD Instinct MI300X",
+      "AMD Instinct MI300X"
+    ],
+    "matmul_512_value": 512.0,
+    "torch_cuda_device_count": 8
+  },
+  "missing_required_artifacts": 0,
+  "mode": "baseline",
+  "model_cache": {
+    "/root/.cache/huggingface/hub/models--Qwen--Qwen3-32B": false,
+    "/root/.cache/huggingface/hub/models--amd--Qwen3.5-397B-A17B-MXFP4": true
+  },
+  "repo": "/workspace/Primus",
+  "required_artifacts": {
+    "primus/recipes/qwen3_moe_a17b_fp8_mi300x.yaml": true,
+    "primus/scripts/upcycle_dense_to_moe.py": true
+  },
+  "router_probe": {
+    "experts": 32,
+    "hidden": 1024,
+    "iterations": 20,
+    "ran": true,
+    "router_entropy_sample": 1.9485509395599365,
+    "router_iters_per_second": 34.18424649545751,
+    "tokens": 4096,
+    "topk": 8
+  },
+  "status": "baseline_reproduced"
+}
