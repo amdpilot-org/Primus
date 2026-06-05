@@ -188,6 +188,22 @@ def _normalize_data_path_arg(path_value):
     return path_value
 
 
+def _gate_entropy_callback(model):
+    """Compute average gate routing entropy across MoE layers for monitoring."""
+    entropies = []
+    for module in model.modules():
+        if hasattr(module, "local_tokens_per_expert") and module.local_tokens_per_expert is not None:
+            counts = module.local_tokens_per_expert.float()
+            total = counts.sum()
+            if total > 0:
+                probs = counts / total
+                entropy = -(probs * torch.log(probs + 1e-12)).sum()
+                entropies.append(entropy.item())
+    if entropies:
+        return sum(entropies) / len(entropies)
+    return None
+
+
 class MegatronTrainer(BaseTrainer, BaseModule):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1582,6 +1598,11 @@ class MegatronTrainer(BaseTrainer, BaseModule):
                 params_norm,
                 num_zeros_in_grad,
             )
+
+            # Gate entropy callback for MoE routing monitoring.
+            gate_entropy = _gate_entropy_callback(model)
+            if gate_entropy is not None and args.log_interval and iteration % args.log_interval == 0:
+                log_rank_0(f"iteration {iteration} | gate_entropy: {gate_entropy:.4f}")
 
             # Evaluation.
             if args.eval_interval and iteration % args.eval_interval == 0 and args.do_valid:

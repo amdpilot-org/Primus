@@ -1,0 +1,76 @@
+work_group: ${PRIMUS_TEAM:amd}
+user_name: ${PRIMUS_USER:root}
+exp_name: &exp_name qwen3-moe-a17b-mi355x-upcycle
+workspace: ./output
+
+modules:
+  pre_trainer:
+    framework: megatron
+    config: pre_trainer.yaml
+    model: qwen3_moe_a17b_mi355x.yaml
+    overrides:
+      # dense warm-start -> 32E top-8 MoE
+      tokenizer_type: HuggingFaceTokenizer
+      tokenizer_model: Qwen/Qwen3-32B
+      num_layers: 64
+      hidden_size: 5120
+      ffn_hidden_size: 27648
+      num_attention_heads: 40
+      group_query_attention: true
+      num_query_groups: 8
+      qk_layernorm: true
+      kv_channels: 128
+      apply_rope_fusion: true
+      normalization: RMSNorm
+      norm_epsilon: 1.0e-6
+      rotary_base: 1000000
+      swiglu: true
+      untie_embeddings_and_output_weights: true
+
+      # MoE: 32 experts, top-8 routing
+      moe_layer_freq: "1"
+      num_experts: 32
+      moe_router_topk: 8
+      moe_ffn_hidden_size: 768
+      moe_aux_loss_coeff: 0.001
+      moe_router_load_balancing_type: aux_loss
+      moe_token_dispatcher_type: alltoall
+      moe_grouped_gemm: true
+      moe_permute_fusion: true
+
+      # training
+      train_iters: 50
+      micro_batch_size: 1
+      global_batch_size: 8
+      seq_length: 4096
+      max_position_embeddings: 131072
+      lr: 1.0e-5
+      min_lr: 0.0
+      lr_warmup_iters: 5
+      lr_decay_iters: null
+      lr_decay_style: cosine
+      weight_decay: 0.1
+      adam_beta1: 0.9
+      adam_beta2: 0.95
+      init_method_std: 0.008
+
+      # parallelism for 8x MI355X
+      tensor_model_parallel_size: 2
+      pipeline_model_parallel_size: 1
+      expert_model_parallel_size: 4
+      overlap_grad_reduce: true
+      overlap_param_gather: true
+
+      # data
+      mock_data: true
+      num_workers: 1
+
+      # upcycling
+      moe_use_upcycling: true
+      pretrained_checkpoint: /root/.cache/huggingface/hub/models--Qwen--Qwen3-32B
+
+      # logging / assertions
+      log_interval: 1
+      eval_interval: 0
+      save_interval: 10000
+      gate_entropy_log_interval: 1
