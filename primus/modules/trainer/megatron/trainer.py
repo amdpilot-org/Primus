@@ -2083,6 +2083,9 @@ class MegatronTrainer(BaseTrainer, BaseModule):
                     )
         if args.num_experts is not None:
             moe_loss_scale = 1 / get_num_microbatches()
+            # Placeholder for gate_entropy: should be computed from router scores
+            # and approach ln(topk) (~2.079 for top-8) when routing is balanced.
+            gate_entropy = None
             track_moe_metrics(
                 loss_scale=moe_loss_scale,
                 iteration=iteration,
@@ -2093,6 +2096,7 @@ class MegatronTrainer(BaseTrainer, BaseModule):
                 per_layer_logging=args.moe_per_layer_logging,
                 moe_layer_freq=args.moe_layer_freq,
                 num_layers=args.num_layers,
+                gate_entropy=gate_entropy,
             )
 
         if iteration % args.log_interval == 0:

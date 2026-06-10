@@ -26,6 +26,7 @@ def track_moe_metrics(
     track_names: Optional[List[str]] = None,
     num_layers: Optional[int] = None,
     moe_layer_freq: Optional[Union[int, List[int]]] = None,
+    gate_entropy: Optional[float] = None,
 ):
     """Track the MoE metrics for logging."""
     # Aux loss logging
@@ -87,5 +88,13 @@ def track_moe_metrics(
                         {f"moe/{name}_layer_{i}": loss for i, loss in enumerate(loss_list.tolist())},
                         iteration,
                     )
+
+    # Log gate entropy if provided (should approach ln(topk) for balanced routing)
+    if gate_entropy is not None and writer is not None:
+        writer.add_scalar("gate_entropy", gate_entropy, iteration)
+        if wandb_writer:
+            wandb_writer.log({"gate_entropy": gate_entropy}, iteration)
+        if mlflow_writer:
+            mlflow_writer.log_metric("gate_entropy", gate_entropy, iteration)
 
     clear_aux_losses_tracker()

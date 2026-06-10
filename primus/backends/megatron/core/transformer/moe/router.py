@@ -21,6 +21,17 @@ class PrimusTopKRouter(TopKRouter):
     def __init__(self, config: TransformerConfig, *args, **kwargs) -> None:
         super().__init__(config=config, *args, **kwargs)
 
+    def compute_gate_entropy(self, scores: torch.Tensor) -> torch.Tensor:
+        """Compute the average Shannon entropy of the gate distribution.
+
+        For top-k routing the entropy should approach ln(topk) when the
+        router is well-balanced.
+        """
+        probs = torch.softmax(scores, dim=-1)
+        # Add small epsilon to avoid log(0)
+        entropy = -(probs * torch.log(probs + 1e-9)).sum(dim=-1)
+        return entropy.mean()
+
     def fused_router_and_auxiliary_loss(self, logits: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         try:
             import primus_turbo.pytorch as pt
