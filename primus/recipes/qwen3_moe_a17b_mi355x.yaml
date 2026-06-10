@@ -1,0 +1,33 @@
+# Stage0 scaffold for amdpilot-org/Primus#4.
+# Qwen3-32B dense checkpoint upcycled to Qwen3.5-style A17B/32E-A8 MoE on MI355X.
+model:
+  name: qwen3_moe_a17b_mi355x
+  source_dense_model: Qwen/Qwen3-32B
+  architecture_reference: amd/Qwen3.5-397B-A17B-MXFP4
+  hidden_size: 8192
+  num_layers: 64
+  num_attention_heads: 64
+  num_key_value_heads: 8
+  moe:
+    enabled: true
+    num_experts: 32
+    top_k: 8
+    expert_init: copy_dense_ffn
+    gate_init: scratch
+    expected_gate_entropy: 2.08
+training:
+  hardware: mi355x
+  gpu_count: 8
+  precision: bf16
+  seq_length: 2048
+  micro_batch_size: 4
+  validation_steps: 50
+  token_budget: 100000
+  dataset: FineWeb-Edu vendored sample
+  assertions:
+    loss_strictly_decreases: true
+    gate_entropy_tolerance: 0.15
+    step_time_vs_dense_baseline_max_ratio: 1.3
+upcycling:
+  script: primus/scripts/upcycle_dense_to_moe.py
+  output: checkpoints/qwen3_32b_to_32e_a8_moe
