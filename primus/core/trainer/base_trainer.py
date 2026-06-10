@@ -22,6 +22,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from primus.core.trainer.gate_entropy import gate_entropy
 from primus.core.utils.env import get_torchrun_env
 
 
@@ -95,6 +96,14 @@ class BaseTrainer(ABC):
                 train(config, ...)
         """
         raise NotImplementedError(f"{self.__class__.__name__} must implement train()")
+
+    def record_gate_entropy(self, router_probabilities: Any) -> float:
+        """Compute and store gate entropy for MoE recipe assertions."""
+        value = gate_entropy(router_probabilities)
+        if not hasattr(self, "metrics"):
+            self.metrics = {}
+        self.metrics["gate_entropy"] = value
+        return value
 
     def cleanup(self, on_error: bool = False):
         """
