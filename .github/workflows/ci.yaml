@@ -386,7 +386,7 @@ jobs:
             --junitxml="${GITHUB_WORKSPACE}/test-reports/torchtitan-e2e.xml"
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: torch-test-reports
           path: test-reports/
@@ -411,7 +411,7 @@ jobs:
       - name: Upload torch coverage json
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-torch
           path: |
@@ -537,7 +537,7 @@ jobs:
           JAX_SKIP_UT=1 python ./tests/run_unit_tests.py --jax
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: jax-test-reports
           path: test-reports/
@@ -558,7 +558,7 @@ jobs:
       - name: Upload jax coverage json
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-jax
           path: coverage_maxtext_e2e.json
