@@ -1,0 +1,52 @@
+======================================================================
+ENVIRONMENT (read from the machine)
+======================================================================
+  python: 3.12.3
+  torch: 2.9.1+rocm7.2.0.git7e1940d4
+  hip: 7.2.26015-fc0010cf6a
+  rocm: None
+  cuda_available: True
+  device_name: AMD Instinct MI355X
+  gcn_arch: gfx950:sramecc+:xnack-
+  total_mem_gb: 309.22
+  multiprocessor_count: 256
+  rocm_filesystem: 7.2.0
+  hipcc: HIP version: 7.2.26015-fc0010cf6a
+  measurement_backend: real upstream primus.tools.benchmark.gemm_bench.profile_gemm
+
+----------------------------------------------------------------------
+BENCHMARK  gemm_4096^3_bf16   M=4096 N=4096 K=4096 dtype=bf16 trans_a=False trans_b=False
+----------------------------------------------------------------------
+  tflops: median=1365.34  mean=1361.40  min=1338.81  max=1371.73  std=9.98  slow_p10=1348.11
+  time(ms)/call: median=0.1007  min=0.1002  max=0.1027  spread=0.0025
+  arith_intensity=1365.33  bw~1000.0 GB/s
+
+----------------------------------------------------------------------
+BENCHMARK  llama3.1_8B_attn_out_fwd_bf16   M=8192 N=4096 K=4096 dtype=bf16 trans_a=False trans_b=True
+----------------------------------------------------------------------
+  tflops: median=1523.92  mean=1524.39  min=1520.74  max=1531.83  std=3.16  slow_p10=1521.71
+  time(ms)/call: median=0.1804  min=0.1794  max=0.1808  spread=0.0013
+  arith_intensity=1638.40  bw~930.1 GB/s
+
+----------------------------------------------------------------------
+BENCHMARK  llama3.1_8B_mlp_down_fwd_bf16   M=8192 N=4096 K=14336 dtype=bf16 trans_a=False trans_b=True
+----------------------------------------------------------------------
+  tflops: median=1603.71  mean=1603.61  min=1601.32  max=1606.43  std=1.36  slow_p10=1601.90
+  time(ms)/call: median=0.5999  min=0.5989  max=0.6008  spread=0.0019
+  arith_intensity=2293.76  bw~699.2 GB/s
+
+----------------------------------------------------------------------
+BENCHMARK  llama3.1_8B_mlp_up_fwd_bf16   M=8192 N=28672 K=4096 dtype=bf16 trans_a=False trans_b=True
+----------------------------------------------------------------------
+  tflops: median=1557.17  mean=1557.24  min=1556.54  max=1558.32  std=0.52  slow_p10=1556.74
+  time(ms)/call: median=1.2357  min=1.2348  max=1.2362  spread=0.0014
+  arith_intensity=2493.22  bw~624.6 GB/s
+
+======================================================================
+SUMMARY TABLE (TFLOPS, sorted by label)
+======================================================================
+shape                              dtype    median     mean      min      max     std  slow_p10
+gemm_4096^3_bf16                   bfloat16  1365.34  1361.40  1338.81  1371.73    9.98   1348.11
+llama3.1_8B_attn_out_fwd_bf16      bfloat16  1523.92  1524.39  1520.74  1531.83    3.16   1521.71
+llama3.1_8B_mlp_down_fwd_bf16      bfloat16  1603.71  1603.61  1601.32  1606.43    1.36   1601.90
+llama3.1_8B_mlp_up_fwd_bf16        bfloat16  1557.17  1557.24  1556.54  1558.32    0.52   1556.74
